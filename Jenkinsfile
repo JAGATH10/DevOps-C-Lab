@@ -6,17 +6,21 @@ pipeline {
     }
 
     stages {
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
                 echo '🔨 Building Docker image...'
                 sh 'docker build -t my-app:latest .'
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy Container') {
             steps {
-                echo '🚀 Deploying application...'
-                sh 'docker run -d --name my-app-container -p 3000:3000 my-app:latest'
+                echo '🚀 Stopping and Removing Existing Container (if any)...'
+                sh '''
+                  docker stop my-app-container || true
+                  docker rm my-app-container || true
+                  docker run -d --name my-app-container -p 3000:3000 my-app:latest
+                '''
             }
         }
     }
@@ -26,12 +30,18 @@ pipeline {
             echo '✅ Build and Deployment Successful'
             sh """
               aws sns publish --topic-arn ${SNS_TOPIC_ARN} \
-              --message 'Jenkins Build and Deployment was Successful' \
+              --message '✅ Jenkins Build and Deployment was Successful' \
               --subject 'Jenkins Build Notification'
             """
         }
+
         failure {
             echo '❌ Build or Deployment Failed'
+            sh """
+              aws sns publish --topic-arn ${SNS_TOPIC_ARN} \
+              --message '❌ Jenkins Build or Deployment Failed' \
+              --subject 'Jenkins Build Notification'
+            """
         }
     }
 }
